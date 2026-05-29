@@ -1,6 +1,6 @@
 /**
  * YearTabs Component
- * Compact pill tabs for selecting year
+ * Compact scrollable pill tabs for selecting year (2010-2024)
  */
 
 import React from 'react';
@@ -14,15 +14,21 @@ interface YearTabsProps {
 }
 
 export const YearTabs: React.FC<YearTabsProps> = ({ selected, onChange }) => {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div
+      ref={scrollRef}
+      className="flex gap-1.5 overflow-x-auto pb-1"
+      style={{ scrollBehavior: 'smooth', maxWidth: '600px' }}
+    >
       {AVAILABLE_YEARS.map((year) => (
         <motion.button
           key={year}
           onClick={() => onChange(year)}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all border-2 ${
+          className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all border-2 whitespace-nowrap flex-shrink-0 ${
             selected === year
-              ? 'bg-stone-700 text-white border-stone-700 shadow-md-soft'
+              ? 'bg-stone-700 text-white border-stone-700 shadow-md'
               : 'bg-white text-stone-600 border-stone-200 hover:border-stone-300 hover:bg-stone-50'
           }`}
           whileHover={{ scale: 1.08 }}
@@ -34,3 +40,5 @@ export const YearTabs: React.FC<YearTabsProps> = ({ selected, onChange }) => {
     </div>
   );
 };
+
+export default YearTabs;

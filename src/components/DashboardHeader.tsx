@@ -1,6 +1,6 @@
 /**
  * DashboardHeader Component
- * Main header with title, controls, and actions
+ * Compact header with title, controls, and actions
  */
 
 import React from 'react';
@@ -31,48 +31,49 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       transition={{ duration: 0.5 }}
       className="bg-white border-b border-stone-200 shadow-sm"
     >
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        {/* Title and Description */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-stone-900 mb-1">
-            Dashboard Geoespacial de Calidad del Aire en Bogotá
+      <div className="max-w-full px-6 py-3">
+        {/* Title Row */}
+        <div className="mb-3">
+          <h1 className="text-xl font-bold text-stone-900">
+            Dashboard de Calidad del Aire - Bogotá
           </h1>
-          <p className="text-stone-600 text-sm">
-            Concentraciones anuales por sector censal y variables sociodemográficas
-          </p>
         </div>
 
-        {/* Controls Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Controls Row - More Compact */}
+        <div className="flex items-center justify-between gap-6">
           {/* Pollutant Selection */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-3 uppercase tracking-wide">
-              Contaminante
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-semibold text-stone-600 uppercase tracking-wide whitespace-nowrap">
+              Contaminante:
             </label>
-            <PollutantTabs selected={selectedPollutant} onChange={onPollutantChange} />
+            <div className="min-w-max">
+              <PollutantTabs selected={selectedPollutant} onChange={onPollutantChange} />
+            </div>
           </div>
 
           {/* Year Selection */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-3 uppercase tracking-wide">
-              Año
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-semibold text-stone-600 uppercase tracking-wide whitespace-nowrap">
+              Año:
             </label>
-            <YearTabs selected={selectedYear} onChange={onYearChange} />
+            <div className="min-w-max">
+              <YearTabs selected={selectedYear} onChange={onYearChange} />
+            </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-end">
-            <motion.button
-              onClick={onCenterBogota}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 font-medium rounded-full transition-all border border-stone-200"
-            >
-              Centrar Bogotá
-            </motion.button>
-          </div>
+          {/* Center Button */}
+          <motion.button
+            onClick={onCenterBogota}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="ml-auto px-4 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-medium text-sm rounded-full transition-all border border-stone-200 whitespace-nowrap"
+          >
+            Centrar Bogotá
+          </motion.button>
         </div>
       </div>
     </motion.header>
   );
 };
+
+export default DashboardHeader;
