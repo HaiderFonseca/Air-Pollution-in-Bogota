@@ -100,7 +100,7 @@ export const SectorDetailPanel: React.FC<SectorDetailPanelProps> = ({
                   ? 'µg/m³'
                   : selectedPollutant === 'PM10'
                     ? 'µg/m³'
-                    : selectedPollutant === 'Black Carbon'
+                    : selectedPollutant === 'eBC'
                       ? 'µg/m³'
                       : 'ppb'}
               </p>

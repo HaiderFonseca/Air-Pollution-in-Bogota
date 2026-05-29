@@ -56,8 +56,8 @@ export function getColorScale(pollutant: Pollutant): ColorScale {
         '#e53935',
       ],
     },
-    'SO₂': {
-      pollutant: 'SO₂',
+    'SO2': {
+      pollutant: 'SO2',
       min: 3,
       max: 20,
       breaks: [3, 7, 12, 16, 20],
@@ -86,8 +86,8 @@ export function getColorScale(pollutant: Pollutant): ColorScale {
         '#e53935',
       ],
     },
-    'O₃': {
-      pollutant: 'O₃',
+    'O3': {
+      pollutant: 'O3',
       min: 25,
       max: 100,
       breaks: [25, 40, 60, 80, 100],
@@ -101,8 +101,8 @@ export function getColorScale(pollutant: Pollutant): ColorScale {
         '#e53935',
       ],
     },
-    'Black Carbon': {
-      pollutant: 'Black Carbon',
+    'eBC': {
+      pollutant: 'eBC',
       min: 1,
       max: 8,
       breaks: [1, 2.5, 4, 6, 8],

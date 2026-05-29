@@ -72,7 +72,7 @@ const GeoJSONLayer: React.FC<GeoJSONLayerProps> = ({
   const color = getColorForConcentration(pollutant, concentration);
 
   const unit =
-    pollutant === 'PM2.5' || pollutant === 'PM10' || pollutant === 'Black Carbon'
+    pollutant === 'PM2.5' || pollutant === 'PM10' || pollutant === 'eBC'
       ? 'µg/m³'
       : 'ppb';
 
