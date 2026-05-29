@@ -40,10 +40,10 @@ export function formatConcentrationWithUnit(
     'PM2.5': 'µg/m³',
     'PM10': 'µg/m³',
     'NO2': 'ppb',
-    'SO₂': 'ppb',
+    'SO2': 'ppb',
     'CO': 'ppm',
-    'O₃': 'ppb',
-    'Black Carbon': 'µg/m³',
+    'O3': 'ppb',
+    'eBC': 'µg/m³',
   };
 
   return `${value.toFixed(decimals)} ${units[pollutant]}`;

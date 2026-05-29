@@ -23,36 +23,105 @@ import {
 } from '../data/mockData';
 
 /**
- * Load census sectors (currently from mock data)
- * PRODUCTION: Load from /public/data/geo/sectores_censales_bogota.geojson
+ * Load census sectors from real data or mock
+ * PRODUCTION: Loads from /public/data/geo/sectores_censales_bogota.geojson
+ * FALLBACK: Uses mock data if real file not found
  *
  * @returns Promise<SectorFeature[]>
  */
 export async function loadSectors(): Promise<SectorFeature[]> {
-  // For mock data, just return immediately
-  // In production, use:
-  // const response = await fetch('/data/geo/sectores_censales_bogota.geojson');
-  // const geojson = await response.json();
-  // return geojson.features.map(convertGeoJSONFeature);
-
-  return Promise.resolve(MOCK_SECTORS);
+  try {
+    // Try to load real GeoJSON data
+    const response = await fetch('/data/geo/sectores_censales_bogota.geojson');
+    
+    if (!response.ok) {
+      console.warn('Real sector data not found, using mock data');
+      return Promise.resolve(MOCK_SECTORS);
+    }
+    
+    const geojson = await response.json();
+    
+    if (!geojson.features || !Array.isArray(geojson.features)) {
+      console.warn('Invalid GeoJSON structure, using mock data');
+      return Promise.resolve(MOCK_SECTORS);
+    }
+    
+    console.log(`Loaded ${geojson.features.length} real census sectors`);
+    return geojson.features.map(convertGeoJSONFeature);
+    
+  } catch (error) {
+    console.warn('Error loading real sector data, using mock data:', error);
+    return Promise.resolve(MOCK_SECTORS);
+  }
 }
 
 /**
- * Load pollutant concentrations (currently from mock data)
- * PRODUCTION: Load from /public/data/geo/concentraciones_sector_censal.geojson
- * or /public/data/geo/concentraciones_sector_censal.json
+ * Load pollutant concentrations from real data or mock
+ * PRODUCTION: Loads from /public/data/geo/concentraciones_sector_censal.json
+ * FALLBACK: Uses mock data if real file not found
  *
  * @returns Promise<PollutantConcentration[]>
  */
 export async function loadConcentrations(): Promise<PollutantConcentration[]> {
-  // For mock data, generate and return
-  // In production, use:
-  // const response = await fetch('/data/geo/concentraciones_sector_censal.geojson');
-  // const data = await response.json();
-  // return data.features.map(convertConcentration);
+  try {
+    // Try to load real JSON data (long format)
+    const response = await fetch('/data/geo/concentraciones_sector_censal.json');
+    
+    if (!response.ok) {
+      console.warn('Real concentration data not found, using mock data');
+      return Promise.resolve(generateMockConcentrations());
+    }
+    
+    const records = await response.json();
+    
+    if (!Array.isArray(records)) {
+      console.warn('Invalid concentration data structure, using mock data');
+      return Promise.resolve(generateMockConcentrations());
+    }
+    
+    // Convert pollutant names from GPKG format to app format
+    // GPKG has: CO, NO2, OZONO, PM10, PM2.5, SO2, eBC
+    // App expects: CO, NO2, O3, PM10, PM2.5, SO2, eBC
+    const converted = records.map(record => ({
+      ...record,
+      pollutant: normalizePollutantName(record.pollutant)
+    }));
+    
+    console.log(`Loaded ${converted.length} real concentration records`);
+    return converted.filter(c => c.concentration !== null && c.concentration !== undefined);
+    
+  } catch (error) {
+    console.warn('Error loading real concentration data, using mock data:', error);
+    return Promise.resolve(generateMockConcentrations());
+  }
+}
 
-  return Promise.resolve(generateMockConcentrations());
+/**
+ * Normalize pollutant names from different data sources
+ * Converts GPKG names to app names
+ */
+function normalizePollutantName(name: string): Pollutant {
+  const normalize: Record<string, Pollutant> = {
+    'CO': 'CO',
+    'NO2': 'NO2',
+    'OZONO': 'O3',
+    'O3': 'O3',
+    'O₃': 'O3',
+    'PM10': 'PM10',
+    'PM2.5': 'PM2.5',
+    'SO2': 'SO2',
+    'SO₂': 'SO2',
+    'eBC': 'eBC',
+    'Black Carbon': 'eBC',
+  };
+  
+  const normalized = normalize[name];
+  if (!normalized) {
+    console.warn(`Unknown pollutant name: ${name}, defaulting to PM2.5`);
+    return 'PM2.5';
+  }
+  
+  return normalized;
 }
 
 /**

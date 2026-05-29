@@ -219,10 +219,10 @@ export const AVAILABLE_POLLUTANTS: Pollutant[] = [
   'PM2.5',
   'PM10',
   'NO2',
-  'SO₂',
+  'SO2',
   'CO',
-  'O₃',
-  'Black Carbon',
+  'O3',
+  'eBC',
 ];
 
 /**
@@ -238,6 +238,12 @@ export const AVAILABLE_YEARS: Year[] = [
   2016,
   2017,
   2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
 ];
 
 /**
@@ -265,10 +271,10 @@ export function generateMockConcentrations(): PollutantConcentration[] {
       'PM2.5': { min: 15, max: 45 },
       'PM10': { min: 30, max: 80 },
       'NO2': { min: 20, max: 60 },
-      'SO₂': { min: 5, max: 20 },
+      'SO2': { min: 5, max: 20 },
       'CO': { min: 0.5, max: 2.5 },
-      'O₃': { min: 30, max: 80 },
-      'Black Carbon': { min: 2, max: 8 },
+      'O3': { min: 30, max: 80 },
+      'eBC': { min: 2, max: 8 },
     };
 
   MOCK_SECTORS.forEach((sector) => {
@@ -311,10 +317,10 @@ function getUnitForPollutant(pollutant: Pollutant): string {
     'PM2.5': 'µg/m³',
     'PM10': 'µg/m³',
     'NO2': 'ppb',
-    'SO₂': 'ppb',
+    'SO2': 'ppb',
     'CO': 'ppm',
-    'O₃': 'ppb',
-    'Black Carbon': 'µg/m³',
+    'O3': 'ppb',
+    'eBC': 'µg/m³',
   };
   return units[pollutant];
 }
