@@ -1,16 +1,18 @@
-/**
- * AppLayout Component
- * Map-first layout with floating panels
- */
-
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DashboardHeader } from './DashboardHeader';
 import { GeoMap } from './GeoMap';
 import { SectorDetailPanel } from './SectorDetailPanel';
 import { Legend } from './Legend';
 import { SmokeTransition } from './SmokeTransition';
-import { SectorFeature, Pollutant, Year, PollutantConcentration, SelectedSector } from '../types/dashboard';
+import {
+  SectorFeature,
+  Pollutant,
+  Year,
+  PollutantConcentration,
+  SelectedSector,
+  LisaCluster,
+} from '../types/dashboard';
 
 interface AppLayoutProps {
   sectors: SectorFeature[];
@@ -24,6 +26,14 @@ interface AppLayoutProps {
   onSectorDeselect: () => void;
   onCenterBogota: () => void;
   isTransitioning: boolean;
+  centerTrigger: number;
+  showLisa: boolean;
+  onToggleLisa: () => void;
+  lisaIndex: Map<string, LisaCluster>;
+  lisaAvailable: boolean;
+  currentLisaCluster: LisaCluster | null;
+  concP5: number;
+  concP95: number;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -38,21 +48,29 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onSectorDeselect,
   onCenterBogota,
   isTransitioning,
+  centerTrigger,
+  showLisa,
+  onToggleLisa,
+  lisaIndex,
+  lisaAvailable,
+  currentLisaCluster,
+  concP5,
+  concP95,
 }) => {
-  const [showDetailPanel, setShowDetailPanel] = React.useState(true);
+  const [showDetailPanel, setShowDetailPanel] = React.useState(false);
+
+  useEffect(() => {
+    if (selectedSector) setShowDetailPanel(true);
+  }, [selectedSector?.setuCcnct]);
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.5 }}
       className="flex flex-col h-screen bg-stone-50"
     >
-      {/* Smoke transition overlay */}
       <SmokeTransition isActive={isTransitioning} />
 
-      {/* Compact Header */}
       <div className="bg-white border-b border-stone-200">
         <DashboardHeader
           selectedPollutant={selectedPollutant}
@@ -63,14 +81,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         />
       </div>
 
-      {/* Map area - Main protagonist (takes most of the screen) */}
-      <motion.div
-        layout
-        className="flex-1 overflow-hidden relative"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-      >
+      {/* Map fills the rest of the screen */}
+      <div className="flex-1 overflow-hidden relative">
         <GeoMap
           sectors={sectors}
           concentrations={concentrations}
@@ -78,64 +90,70 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           selectedYear={selectedYear}
           selectedSectorId={selectedSector?.setuCcnct || null}
           onSectorSelect={onSectorSelect}
+          centerTrigger={centerTrigger}
+          showLisa={showLisa}
+          lisaIndex={lisaIndex}
+          concP5={concP5}
+          concP95={concP95}
         />
 
-        {/* Floating Legend Panel - Lower left corner */}
+        {/* LISA toggle — top-left pill */}
+        <div className="absolute top-4 left-4" style={{ zIndex: 1000 }}>
+          <button
+            onClick={onToggleLisa}
+            className={`
+              px-4 py-1.5 rounded-full text-sm font-semibold shadow-md
+              border transition-all duration-200
+              ${showLisa
+                ? 'bg-stone-800 text-white border-stone-900'
+                : 'bg-white/90 text-stone-700 border-stone-300 hover:bg-stone-100'}
+            `}
+          >
+            Clusters LISA
+          </button>
+          {showLisa && !lisaAvailable && (
+            <div className="mt-2 bg-white/95 rounded-lg px-3 py-2 shadow text-xs text-stone-500 max-w-[200px]">
+              No hay capa LISA disponible para esta combinación
+            </div>
+          )}
+        </div>
+
+        {/* Floating Legend — bottom-left */}
         <motion.div
-          className="absolute bottom-6 left-6 z-40"
+          className="absolute bottom-6 left-4"
+          style={{ zIndex: 1000 }}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
         >
           <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-lg overflow-hidden">
-            <div className="p-4">
-              <Legend pollutant={selectedPollutant} />
+            <div className="p-3">
+              <Legend
+                pollutant={selectedPollutant}
+                showLisa={showLisa}
+                concP5={concP5}
+                concP95={concP95}
+              />
             </div>
           </div>
         </motion.div>
 
-        {/* Floating Detail Panel - Right side */}
+        {/* Floating Detail Panel — right */}
         {selectedSector && showDetailPanel && (
           <motion.div
-            className="absolute top-6 right-6 bottom-6 z-40 w-96 overflow-auto"
+            className="absolute top-4 right-4 bottom-4"
+            style={{ zIndex: 1000, width: '22rem' }}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.3 }}
           >
             <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-lg overflow-hidden h-full flex flex-col">
-              {/* Close button */}
-              <div className="flex justify-end p-4 border-b border-stone-100">
-                <button
-                  onClick={() => {
-                    setShowDetailPanel(false);
-                    onSectorDeselect();
-                  }}
-                  className="text-stone-400 hover:text-stone-600 transition-colors"
-                  aria-label="Close detail panel"
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-              
-              {/* Detail panel content */}
               <div className="flex-1 overflow-auto">
                 <SectorDetailPanel
                   sector={selectedSector}
                   selectedPollutant={selectedPollutant}
                   selectedYear={selectedYear}
+                  lisaCluster={currentLisaCluster}
                   onClose={() => {
                     setShowDetailPanel(false);
                     onSectorDeselect();
@@ -145,7 +163,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             </div>
           </motion.div>
         )}
-      </motion.div>
+      </div>
     </motion.div>
   );
 };

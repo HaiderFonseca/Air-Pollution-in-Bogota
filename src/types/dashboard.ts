@@ -4,6 +4,15 @@
 
 export type Pollutant = 'PM2.5' | 'PM10' | 'NO2' | 'SO2' | 'CO' | 'O3' | 'eBC';
 
+export type LisaCluster = 'HH' | 'LL' | 'HL' | 'LH' | 'NS';
+
+export interface LisaRecord {
+  setuCcnct: string;
+  pollutant: Pollutant;
+  year: Year;
+  cluster: LisaCluster;
+}
+
 export type Year = 2010 | 2011 | 2012 | 2013 | 2014 | 2015 | 2016 | 2017 | 2018 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024;
 
 /**

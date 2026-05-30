@@ -1,18 +1,11 @@
-/**
- * Data utilities for loading and processing dashboard data
- *
- * PRODUCTION NOTES:
- * - This file currently loads mock data
- * - To connect real data, replace the mock loading functions with actual GeoJSON/JSON/CSV loading
- * - Keep the same interface structure so component code doesn't need to change
- */
-
 import {
   SectorFeature,
   PollutantConcentration,
   SelectedSector,
   Pollutant,
   Year,
+  LisaRecord,
+  LisaCluster,
 } from '../types/dashboard';
 import {
   MOCK_SECTORS,
@@ -22,138 +15,218 @@ import {
   getConcentrationValue,
 } from '../data/mockData';
 
-/**
- * Load census sectors from real data or mock
- * PRODUCTION: Loads from /public/data/geo/sectores_censales_bogota.geojson
- * FALLBACK: Uses mock data if real file not found
- *
- * @returns Promise<SectorFeature[]>
- */
+export function normalizeSectorId(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
+function normalizePollutantName(name: string): Pollutant {
+  const map: Record<string, Pollutant> = {
+    CO: 'CO', co: 'CO',
+    eBC: 'eBC', EBC: 'eBC', BC: 'eBC', 'Black Carbon': 'eBC', BlackCarbon: 'eBC', black_carbon: 'eBC',
+    NO2: 'NO2', no2: 'NO2',
+    OZONO: 'O3', O3: 'O3', 'O₃': 'O3', o3: 'O3',
+    PM10: 'PM10', pm10: 'PM10',
+    'PM2.5': 'PM2.5', PM25: 'PM2.5', PM2_5: 'PM2.5', pm25: 'PM2.5', pm2_5: 'PM2.5',
+    SO2: 'SO2', 'SO₂': 'SO2', so2: 'SO2',
+  };
+  const normalized = map[name];
+  if (!normalized && import.meta.env.DEV) {
+    console.warn(`[DEV] Unknown pollutant name: "${name}"`);
+  }
+  return normalized ?? 'PM2.5';
+}
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.split('\n');
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim());
+  const result: Record<string, string>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const values = line.split(',');
+    const row: Record<string, string> = {};
+    headers.forEach((header, j) => {
+      row[header] = values[j]?.trim() ?? '';
+    });
+    result.push(row);
+  }
+  return result;
+}
+
+async function loadSociodemographics(): Promise<Map<string, Record<string, string>>> {
+  const socioMap = new Map<string, Record<string, string>>();
+  try {
+    const response = await fetch('/data/tabular/sociodemograficas_sector_censal.csv');
+    if (!response.ok) {
+      console.warn('Sociodemographic CSV not found');
+      return socioMap;
+    }
+    const text = await response.text();
+    const rows = parseCSV(text);
+    rows.forEach(row => {
+      const key = normalizeSectorId(row['SETU_CCNCT']);
+      if (key) socioMap.set(key, row);
+    });
+    if (import.meta.env.DEV) {
+      console.log(`[DEV] Loaded ${socioMap.size} sociodemographic records`);
+      const sample = rows[0];
+      if (sample) console.log(`[DEV] Socio sample SETU_CCNCT:`, sample['SETU_CCNCT']);
+    }
+  } catch (e) {
+    console.warn('Error loading sociodemographic CSV:', e);
+  }
+  return socioMap;
+}
+
+export function convertGeoJSONFeature(
+  feature: Record<string, any>,
+  socioData?: Map<string, Record<string, string>>,
+): SectorFeature {
+  const setuCcnct = normalizeSectorId(feature.properties?.SETU_CCNCT);
+  const socio = socioData?.get(setuCcnct);
+  const num = (val: string | number | undefined): number => {
+    const n = parseFloat(String(val ?? '0'));
+    return isNaN(n) ? 0 : n;
+  };
+
+  return {
+    id: setuCcnct,
+    setuCcnct,
+    name: `Sector ${setuCcnct}`,
+    geometry: feature.geometry,
+    properties: {
+      setuCcnct,
+      areaName: '',
+      locality: '',
+      demographics: {
+        totalPopulation: socio
+          ? num(socio['STP27_PERS'])
+          : num(feature.properties?.STP27_PERS),
+        children0_9: num(socio?.['STP34_1_ED']),
+        youth10_19: num(socio?.['STP34_2_ED']),
+        adults20_59:
+          num(socio?.['STP34_3_ED']) +
+          num(socio?.['STP34_4_ED']) +
+          num(socio?.['STP34_5_ED']) +
+          num(socio?.['STP34_6_ED']),
+        olderAdults60Plus:
+          num(socio?.['STP34_7_ED']) +
+          num(socio?.['STP34_8_ED']) +
+          num(socio?.['STP34_9_ED']),
+        majorityStrata: String(socio?.['ESTRATO_MAYORITARIO'] ?? feature.properties?.ESTRATO_MAYORITARIO ?? ''),
+        averageIPM: num(socio?.['IPM_PROMEDIO']),
+      },
+    },
+  };
+}
+
 export async function loadSectors(): Promise<SectorFeature[]> {
   try {
-    // Try to load real GeoJSON data
-    const response = await fetch('/data/geo/sectores_censales_bogota.geojson');
-    
-    if (!response.ok) {
-      console.warn('Real sector data not found, using mock data');
-      return Promise.resolve(MOCK_SECTORS);
+    const [geoResponse, socioMap] = await Promise.all([
+      fetch('/data/geo/sectores_censales_bogota.geojson'),
+      loadSociodemographics(),
+    ]);
+
+    if (!geoResponse.ok) {
+      console.warn('GeoJSON not found, using mock data');
+      return MOCK_SECTORS;
     }
-    
-    const geojson = await response.json();
-    
+
+    const geojson = await geoResponse.json();
     if (!geojson.features || !Array.isArray(geojson.features)) {
       console.warn('Invalid GeoJSON structure, using mock data');
-      return Promise.resolve(MOCK_SECTORS);
+      return MOCK_SECTORS;
     }
-    
-    console.log(`Loaded ${geojson.features.length} real census sectors`);
-    return geojson.features.map(convertGeoJSONFeature);
-    
+
+    const sectors: SectorFeature[] = geojson.features.map(
+      (f: Record<string, any>) => convertGeoJSONFeature(f, socioMap),
+    );
+
+    if (import.meta.env.DEV) {
+      console.log(`[DEV] Loaded ${sectors.length} census sectors`);
+      if (sectors[0]) console.log(`[DEV] Sample sector SETU_CCNCT:`, sectors[0].setuCcnct);
+      const withSocio = sectors.filter(s => s.properties.demographics.totalPopulation > 0);
+      console.log(`[DEV] Sectors with sociodemographic data: ${withSocio.length}`);
+    }
+
+    return sectors;
   } catch (error) {
-    console.warn('Error loading real sector data, using mock data:', error);
-    return Promise.resolve(MOCK_SECTORS);
+    console.warn('Error loading sectors, using mock data:', error);
+    return MOCK_SECTORS;
   }
 }
 
-/**
- * Load pollutant concentrations from real data or mock
- * PRODUCTION: Loads from /public/data/geo/concentraciones_sector_censal.json
- * FALLBACK: Uses mock data if real file not found
- *
- * @returns Promise<PollutantConcentration[]>
- */
 export async function loadConcentrations(): Promise<PollutantConcentration[]> {
   try {
-    // Try to load real JSON data (long format)
     const response = await fetch('/data/geo/concentraciones_sector_censal.json');
-    
     if (!response.ok) {
-      console.warn('Real concentration data not found, using mock data');
-      return Promise.resolve(generateMockConcentrations());
+      console.warn('Concentrations JSON not found, using mock data');
+      return generateMockConcentrations();
     }
-    
+
     const records = await response.json();
-    
     if (!Array.isArray(records)) {
-      console.warn('Invalid concentration data structure, using mock data');
-      return Promise.resolve(generateMockConcentrations());
+      console.warn('Invalid concentrations data, using mock data');
+      return generateMockConcentrations();
     }
-    
-    // Convert pollutant names from GPKG format to app format
-    // GPKG has: CO, NO2, OZONO, PM10, PM2.5, SO2, eBC
-    // App expects: CO, NO2, O3, PM10, PM2.5, SO2, eBC
-    const converted = records.map(record => ({
-      ...record,
-      pollutant: normalizePollutantName(record.pollutant)
-    }));
-    
-    console.log(`Loaded ${converted.length} real concentration records`);
-    return converted.filter(c => c.concentration !== null && c.concentration !== undefined);
-    
+
+    const converted: PollutantConcentration[] = records
+      .filter((r: Record<string, any>) => r.concentration !== null && r.concentration !== undefined)
+      .map((record: Record<string, any>) => ({
+        setuCcnct: normalizeSectorId(record.SETU_CCNCT),
+        pollutant: normalizePollutantName(String(record.pollutant ?? '')),
+        year: Number(record.year) as Year,
+        concentration: Number(record.concentration),
+      }));
+
+    if (import.meta.env.DEV) {
+      console.log(`[DEV] Loaded ${converted.length} concentration records`);
+      if (converted[0]) console.log(`[DEV] Sample concentration:`, converted[0]);
+      const pollutants = [...new Set(converted.map(c => c.pollutant))].sort();
+      console.log(`[DEV] Unique pollutants:`, pollutants.join(', '));
+      const years = [...new Set(converted.map(c => c.year))].sort((a, b) => a - b);
+      console.log(`[DEV] Unique years:`, years.join(', '));
+    }
+
+    return converted;
   } catch (error) {
-    console.warn('Error loading real concentration data, using mock data:', error);
-    return Promise.resolve(generateMockConcentrations());
+    console.warn('Error loading concentrations, using mock data:', error);
+    return generateMockConcentrations();
   }
 }
 
-/**
- * Normalize pollutant names from different data sources
- * Converts GPKG names to app names
- */
-function normalizePollutantName(name: string): Pollutant {
-  const normalize: Record<string, Pollutant> = {
-    'CO': 'CO',
-    'NO2': 'NO2',
-    'OZONO': 'O3',
-    'O3': 'O3',
-    'O₃': 'O3',
-    'PM10': 'PM10',
-    'PM2.5': 'PM2.5',
-    'SO2': 'SO2',
-    'SO₂': 'SO2',
-    'eBC': 'eBC',
-    'Black Carbon': 'eBC',
-  };
-  
-  const normalized = normalize[name];
-  if (!normalized) {
-    console.warn(`Unknown pollutant name: ${name}, defaulting to PM2.5`);
-    return 'PM2.5';
-  }
-  
-  return normalized;
-}
-
-/**
- * Get a selected sector with all its data
- * IMPORTANT: Uses SETU_CCNCT as the join key
- *
- * @param setuCcnct - Census sector identifier
- * @param sectors - All sectors
- * @param concentrations - All concentration records
- * @returns SelectedSector | null
- */
 export function getSectorData(
   setuCcnct: string,
   sectors: SectorFeature[],
   concentrations: PollutantConcentration[],
 ): SelectedSector | null {
-  const sector = sectors.find((s) => s.setuCcnct === setuCcnct);
+  const normalizedId = normalizeSectorId(setuCcnct);
+  const sector = sectors.find(s => normalizeSectorId(s.setuCcnct) === normalizedId);
 
   if (!sector) {
+    if (import.meta.env.DEV) console.warn(`[DEV] Sector not found for id: ${normalizedId}`);
     return null;
   }
 
-  // Build concentration data for this sector (join by SETU_CCNCT)
   const sectorConcentrations: SelectedSector['concentrations'] = {};
-
-  AVAILABLE_POLLUTANTS.forEach((pollutant) => {
+  AVAILABLE_POLLUTANTS.forEach(pollutant => {
     sectorConcentrations[pollutant] = {};
-    AVAILABLE_YEARS.forEach((year) => {
-      const value = getConcentrationValue(setuCcnct, pollutant, year, concentrations);
-      sectorConcentrations[pollutant]![year] = value;
+    AVAILABLE_YEARS.forEach(year => {
+      sectorConcentrations[pollutant]![year] = getConcentrationValue(
+        normalizedId,
+        pollutant,
+        year,
+        concentrations,
+      );
     });
   });
+
+  if (import.meta.env.DEV) {
+    console.log(`[DEV] Clicked sector: ${normalizedId}`);
+    const pm25_2018 = sectorConcentrations['PM2.5']?.[2018];
+    console.log(`[DEV] PM2.5 year=2018 for this sector:`, pm25_2018 ?? 'not found');
+  }
 
   return {
     setuCcnct: sector.setuCcnct,
@@ -164,96 +237,75 @@ export function getSectorData(
   };
 }
 
-/**
- * Get concentration value for a specific sector, pollutant, and year
- * Returns null if not found or missing data
- */
 export function getConcentration(
   setuCcnct: string,
   pollutant: Pollutant,
   year: Year,
   concentrations: PollutantConcentration[],
 ): number | null {
-  return getConcentrationValue(setuCcnct, pollutant, year, concentrations);
+  const normalizedId = normalizeSectorId(setuCcnct);
+
+  if (import.meta.env.DEV) {
+    const result = getConcentrationValue(normalizedId, pollutant, year, concentrations);
+    if (result === null) {
+      // Only log misses occasionally to avoid flooding
+    }
+    return result;
+  }
+
+  return getConcentrationValue(normalizedId, pollutant, year, concentrations);
 }
 
-/**
- * Get all concentration values for a specific pollutant and year
- * Used for calculating map color scale ranges
- */
 export function getConcentrationRange(
   pollutant: Pollutant,
   year: Year,
   concentrations: PollutantConcentration[],
 ): { min: number; max: number; hasData: boolean } {
   const values = concentrations
-    .filter((c) => c.pollutant === pollutant && c.year === year && c.concentration !== null)
-    .map((c) => c.concentration as number);
+    .filter(c => c.pollutant === pollutant && c.year === year && c.concentration !== null)
+    .map(c => c.concentration as number);
 
-  if (values.length === 0) {
-    return { min: 0, max: 0, hasData: false };
-  }
-
-  return {
-    min: Math.min(...values),
-    max: Math.max(...values),
-    hasData: true,
-  };
+  if (values.length === 0) return { min: 0, max: 0, hasData: false };
+  return { min: Math.min(...values), max: Math.max(...values), hasData: true };
 }
 
-/**
- * Helper: Convert GeoJSON feature to SectorFeature (for future real data loading)
- * PRODUCTION: Use this when loading real GeoJSON
- */
-export function convertGeoJSONFeature(feature: any): SectorFeature {
-  // This is a template for future implementation
-  return {
-    id: feature.properties.SETU_CCNCT,
-    setuCcnct: feature.properties.SETU_CCNCT,
-    name: feature.properties.name || 'Sector',
-    geometry: feature.geometry,
-    properties: {
-      setuCcnct: feature.properties.SETU_CCNCT,
-      areaName: feature.properties.areaName || '',
-      locality: feature.properties.locality || '',
-      demographics: {
-        totalPopulation: feature.properties.STP27_PERS || 0,
-        children0_9: feature.properties.STP34_1_ED || 0,
-        youth10_19: feature.properties.STP34_2_ED || 0,
-        adults20_59:
-          (feature.properties.STP34_3_ED || 0) +
-          (feature.properties.STP34_4_ED || 0) +
-          (feature.properties.STP34_5_ED || 0) +
-          (feature.properties.STP34_6_ED || 0),
-        olderAdults60Plus:
-          (feature.properties.STP34_7_ED || 0) +
-          (feature.properties.STP34_8_ED || 0) +
-          (feature.properties.STP34_9_ED || 0),
-        majorityStrata: feature.properties.ESTRATO_MAYORITARIO || '3',
-        averageIPM: feature.properties.IPM_PROMEDIO || 0,
-      },
-    },
-  };
-}
-
-/**
- * Helper: Convert concentration record from real data format
- * PRODUCTION: Use this when loading real concentration data
- */
-export function convertConcentrationRecord(record: any): PollutantConcentration {
-  // This is a template for future implementation
-  return {
-    setuCcnct: record.SETU_CCNCT || record.setuCcnct,
-    year: parseInt(record.year || record.YEAR) as Year,
-    pollutant: record.pollutant as Pollutant,
-    concentration: record.concentration || null,
-    unit: record.unit,
-  };
-}
-
-/**
- * Check if a value is missing data
- */
 export function isMissingData(value: number | null): boolean {
   return value === null || value === undefined;
+}
+
+export async function loadLisaClusters(): Promise<LisaRecord[]> {
+  try {
+    const response = await fetch('/data/lisa/lisa_clusters.json');
+    if (!response.ok) {
+      console.warn('LISA clusters file not found');
+      return [];
+    }
+    const records = await response.json();
+    if (!Array.isArray(records)) return [];
+
+    const converted: LisaRecord[] = records.map((r: Record<string, unknown>) => ({
+      setuCcnct: normalizeSectorId(r['SETU_CCNCT']),
+      pollutant: r['pollutant'] as Pollutant,
+      year: Number(r['year']) as Year,
+      cluster: r['cluster'] as LisaCluster,
+    }));
+
+    if (import.meta.env.DEV) {
+      console.log(`[DEV] Loaded ${converted.length} LISA cluster records`);
+    }
+    return converted;
+  } catch (e) {
+    console.warn('Error loading LISA clusters:', e);
+    return [];
+  }
+}
+
+export function convertConcentrationRecord(record: Record<string, any>): PollutantConcentration {
+  return {
+    setuCcnct: normalizeSectorId(record.SETU_CCNCT ?? record.setuCcnct),
+    year: Number(record.year ?? record.YEAR) as Year,
+    pollutant: normalizePollutantName(String(record.pollutant ?? '')) as Pollutant,
+    concentration: record.concentration ?? null,
+    unit: record.unit,
+  };
 }

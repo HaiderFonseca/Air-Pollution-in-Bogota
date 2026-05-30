@@ -41,8 +41,8 @@ export function formatConcentrationWithUnit(
     'PM10': 'µg/m³',
     'NO2': 'ppb',
     'SO2': 'ppb',
-    'CO': 'ppm',
-    'O3': 'ppb',
+    'CO': 'µg/m³',
+    'O3': 'µg/m³',
     'eBC': 'µg/m³',
   };
 

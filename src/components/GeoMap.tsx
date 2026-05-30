@@ -1,15 +1,9 @@
-/**
- * GeoMap Component
- * Interactive Leaflet map showing Bogotá census sectors with air pollution data
- */
-
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useCallback } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
-import { latLngBounds } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { SectorFeature, Pollutant, Year, PollutantConcentration } from '../types/dashboard';
-import { getColorForConcentration, getConcentrationLabel } from '../utils/colorScales';
-import { getConcentration } from '../utils/dataUtils';
+import { SectorFeature, Pollutant, Year, PollutantConcentration, LisaCluster } from '../types/dashboard';
+import { getContinuousColor, getConcentrationLabel, LISA_COLORS, LISA_LABELS } from '../utils/colorScales';
+import { normalizeSectorId } from '../utils/dataUtils';
 import { formatNumber } from '../utils/formatters';
 
 interface GeoMapProps {
@@ -19,111 +13,117 @@ interface GeoMapProps {
   selectedYear: Year;
   selectedSectorId: string | null;
   onSectorSelect: (setuCcnct: string) => void;
+  centerTrigger: number;
+  showLisa: boolean;
+  lisaIndex: Map<string, LisaCluster>;
+  concP5: number;
+  concP95: number;
 }
 
-// Component to center the map on Bogotá
-const MapCenterController: React.FC = () => {
+// Tighter bounds that keep Bogotá nicely framed
+const BOGOTA_BOUNDS: [[number, number], [number, number]] = [
+  [4.47, -74.23],
+  [4.84, -73.99],
+];
+
+const BogotaRecenter: React.FC<{ trigger: number }> = ({ trigger }) => {
   const map = useMap();
-
   useEffect(() => {
-    const bounds = latLngBounds(
-      [4.5, -74.3], // Southwest
-      [4.9, -73.8], // Northeast
-    );
-
-    map.fitBounds(bounds, { padding: [50, 50] });
-  }, [map]);
-
+    map.fitBounds(BOGOTA_BOUNDS, { padding: [10, 10] });
+  }, [trigger, map]);
   return null;
 };
 
-interface GeoJSONLayerProps {
-  sector: SectorFeature;
-  pollutant: Pollutant;
-  year: Year;
-  concentrations: PollutantConcentration[];
-  isSelected: boolean;
-  onSelect: (setuCcnct: string) => void;
-}
-
-const isValidGeometry = (geometry: any) => {
-  if (!geometry) return false;
-  if (!geometry.type) return false;
-  if (!geometry.coordinates) return false;
-  if (!Array.isArray(geometry.coordinates)) return false;
-
+const isValidGeometry = (geometry: any): boolean => {
+  if (!geometry?.type || !Array.isArray(geometry?.coordinates)) return false;
   return geometry.type === 'Polygon' || geometry.type === 'MultiPolygon';
 };
 
-const GeoJSONLayer: React.FC<GeoJSONLayerProps> = ({
+const POLLUTANT_UNIT: Record<Pollutant, string> = {
+  'PM2.5': 'µg/m³', 'PM10': 'µg/m³', 'NO2': 'µg/m³',
+  'SO2': 'µg/m³', 'CO': 'µg/m³', 'O3': 'µg/m³', 'eBC': 'µg/m³',
+};
+
+interface LayerProps {
+  sector: SectorFeature;
+  pollutant: Pollutant;
+  year: Year;
+  concentration: number | null;
+  lisaCluster: LisaCluster | null;
+  isSelected: boolean;
+  showLisa: boolean;
+  concP5: number;
+  concP95: number;
+  onSelect: (setuCcnct: string) => void;
+}
+
+const GeoJSONLayer: React.FC<LayerProps> = ({
   sector,
   pollutant,
   year,
-  concentrations,
+  concentration,
+  lisaCluster,
   isSelected,
+  showLisa,
+  concP5,
+  concP95,
   onSelect,
 }) => {
-  // Safety check: Leaflet crashes if geometry is undefined, null or malformed.
-  if (!sector || !isValidGeometry(sector.geometry)) {
-    return null;
-  }
+  if (!sector || !isValidGeometry(sector.geometry)) return null;
 
-  const concentration = getConcentration(sector.setuCcnct, pollutant, year, concentrations);
-  const color = getColorForConcentration(pollutant, concentration);
-
-  const unit =
-    pollutant === 'PM2.5' || pollutant === 'PM10' || pollutant === 'eBC'
-      ? 'µg/m³'
-      : 'ppb';
+  const unit = POLLUTANT_UNIT[pollutant];
 
   const feature = {
     type: 'Feature',
     geometry: sector.geometry,
-    properties: {
-      ...(sector.properties ?? {}),
-      SETU_CCNCT: sector.setuCcnct,
-      name: sector.name ?? sector.setuCcnct,
-    },
+    properties: { SETU_CCNCT: sector.setuCcnct },
   };
+
+  const concText =
+    concentration !== null && concentration !== undefined
+      ? `${formatNumber(concentration, 2)} ${unit}`
+      : 'Sin dato';
+
+  const lisaText = lisaCluster ? (LISA_LABELS[lisaCluster] ?? lisaCluster) : 'Sin dato LISA';
 
   const onEachFeature = (_feature: any, layer: any) => {
     layer.bindPopup(
-      `
-      <div class="text-sm">
-        <p class="font-semibold">${sector.name ?? 'Sector censal'}</p>
-        <p class="text-xs text-gray-600">SETU_CCNCT: ${sector.setuCcnct}</p>
-        <p class="text-xs">
-          ${pollutant}: ${
-            concentration !== null && concentration !== undefined
-              ? `${formatNumber(concentration, 2)} ${unit}`
-              : 'Sin dato'
-          }
-        </p>
-        <p class="text-xs">${getConcentrationLabel(pollutant, concentration)}</p>
-      </div>
-      `,
-      {
-        className: 'custom-popup',
-      },
+      `<div style="font-size:12px;line-height:1.5;min-width:160px">
+        <p style="font-weight:700;margin:0 0 3px">${sector.name}</p>
+        <p style="color:#666;margin:0 0 4px;font-size:10px">SETU_CCNCT: ${sector.setuCcnct}</p>
+        <p style="margin:0 0 2px"><b>${pollutant}:</b> ${concText}</p>
+        <p style="color:#666;margin:0 0 4px;font-size:11px">${getConcentrationLabel(pollutant, concentration)} · ${year}</p>
+        <p style="margin:0;font-size:11px"><b>LISA:</b> ${lisaText}</p>
+      </div>`,
+      { className: 'custom-popup' },
     );
-
-    layer.on('click', () => {
-      onSelect(sector.setuCcnct);
-    });
+    layer.on('click', () => onSelect(sector.setuCcnct));
   };
+
+  // Compute style based on mode
+  let fillColor: string;
+  let fillOpacity: number;
+
+  if (showLisa) {
+    const clusterKey = lisaCluster ?? 'NS';
+    fillColor = LISA_COLORS[clusterKey] ?? LISA_COLORS.NS;
+    fillOpacity = (lisaCluster && lisaCluster !== 'NS') ? 0.78 : 0.07;
+  } else {
+    fillColor = getContinuousColor(concentration, concP5, concP95);
+    fillOpacity = concentration === null ? 0.22 : 0.58;
+  }
 
   return (
     <GeoJSON
-      key={`${sector.setuCcnct}-${pollutant}-${year}-${isSelected ? 'selected' : 'normal'}`}
+      key={`${sector.setuCcnct}-${pollutant}-${year}-${isSelected}-${showLisa}`}
       data={feature as any}
       onEachFeature={onEachFeature}
       style={() => ({
-        fillColor: color,
-        weight: isSelected ? 3 : 1.5,
+        fillColor,
+        fillOpacity,
+        weight: isSelected ? 2.5 : 0.7,
         opacity: 1,
-        color: isSelected ? '#1c1917' : '#999',
-        dashArray: '',
-        fillOpacity: concentration === null || concentration === undefined ? 0.35 : 0.85,
+        color: isSelected ? '#1c1917' : '#888',
       })}
     />
   );
@@ -136,14 +136,47 @@ export const GeoMap: React.FC<GeoMapProps> = ({
   selectedYear,
   selectedSectorId,
   onSectorSelect,
+  centerTrigger,
+  showLisa,
+  lisaIndex,
+  concP5,
+  concP95,
 }) => {
-  const validSectors = sectors.filter((sector) => sector && isValidGeometry(sector.geometry));
+  // O(1) concentration lookup
+  const concIndex = useMemo(() => {
+    const idx = new Map<string, number | null>();
+    concentrations.forEach(c => {
+      idx.set(`${c.setuCcnct}|${c.pollutant}|${c.year}`, c.concentration);
+    });
+    return idx;
+  }, [concentrations]);
+
+  const lookupConc = useCallback(
+    (setuCcnct: string): number | null => {
+      const key = `${normalizeSectorId(setuCcnct)}|${selectedPollutant}|${selectedYear}`;
+      return concIndex.has(key) ? (concIndex.get(key) ?? null) : null;
+    },
+    [concIndex, selectedPollutant, selectedYear],
+  );
+
+  const lookupLisa = useCallback(
+    (setuCcnct: string): LisaCluster | null => {
+      const key = `${normalizeSectorId(setuCcnct)}|${selectedPollutant}|${selectedYear}`;
+      return lisaIndex.get(key) ?? null;
+    },
+    [lisaIndex, selectedPollutant, selectedYear],
+  );
+
+  const validSectors = useMemo(
+    () => sectors.filter(s => s && isValidGeometry(s.geometry)),
+    [sectors],
+  );
 
   return (
-    <div className="w-full h-full relative rounded-2xl overflow-hidden shadow-lg-soft">
+    <div className="w-full h-full relative rounded-2xl overflow-hidden shadow-lg">
       <MapContainer
-        center={[4.7111, -74.0721]}
-        zoom={12}
+        center={[4.66, -74.11]}
+        zoom={11}
         scrollWheelZoom={true}
         style={{ width: '100%', height: '100%' }}
       >
@@ -153,30 +186,24 @@ export const GeoMap: React.FC<GeoMapProps> = ({
           maxZoom={19}
         />
 
-        <MapCenterController />
+        <BogotaRecenter trigger={centerTrigger} />
 
-        {validSectors.map((sector) => (
+        {validSectors.map(sector => (
           <GeoJSONLayer
             key={sector.setuCcnct}
             sector={sector}
             pollutant={selectedPollutant}
             year={selectedYear}
-            concentrations={concentrations}
+            concentration={lookupConc(sector.setuCcnct)}
+            lisaCluster={lookupLisa(sector.setuCcnct)}
             isSelected={selectedSectorId === sector.setuCcnct}
+            showLisa={showLisa}
+            concP5={concP5}
+            concP95={concP95}
             onSelect={onSectorSelect}
           />
         ))}
       </MapContainer>
-
-      <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-md text-xs text-stone-600 pointer-events-none max-w-xs">
-        <p className="font-medium text-stone-900 mb-1">Interacción con el mapa</p>
-        <ul className="space-y-1 text-stone-600">
-          <li>Haz clic en un sector para ver detalles</li>
-          <li>Usa la rueda del ratón para hacer zoom</li>
-          <li>Arrastra para mover el mapa</li>
-        </ul>
-      </div>
     </div>
   );
 };
-
