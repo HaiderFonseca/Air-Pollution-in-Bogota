@@ -1,0 +1,20 @@
+﻿localidad,n_sectores,poblacion_total,ipm_promedio,estrato_mayoritario,quintil_ipm_mayoritario,metodo_asignacion
+ANTONIO NARIÑO,3,6613,0.0987,3,Q3,Centroide dentro del poligono de la localidad
+BARRIOS UNIDOS,25,91821,0.0593,3,Q2,Centroide dentro del poligono de la localidad
+BOSA,10,455814,0.1259,2,Q4,Centroide dentro del poligono de la localidad
+CHAPINERO,45,186068,0.0642,4,Q1,Centroide dentro del poligono de la localidad
+CIUDAD BOLIVAR,52,602195,0.1633,1,Q5,Centroide dentro del poligono de la localidad
+ENGATIVA,52,733495,0.0618,3,Q2,Centroide dentro del poligono de la localidad
+FONTIBON,30,378171,0.1275,3,Q3,Centroide dentro del poligono de la localidad
+KENNEDY,61,1244606,0.1027,3,Q3,Centroide dentro del poligono de la localidad
+LOS MARTIRES,19,70865,0.0804,3,Q2,Centroide dentro del poligono de la localidad
+PUENTE ARANDA,40,209115,0.0712,3,Q1,Centroide dentro del poligono de la localidad
+RAFAEL URIBE URIBE,33,328042,0.1013,3,Q3,Centroide dentro del poligono de la localidad
+SAN CRISTOBAL,58,432523,0.135,2,Q4,Centroide dentro del poligono de la localidad
+SANTA FE,36,117796,0.1383,3,Q5,Centroide dentro del poligono de la localidad
+SUBA,70,1303309,0.0758,3,Q1,Centroide dentro del poligono de la localidad
+SUMAPAZ,5,381,0.1169,1,Q3,Centroide dentro del poligono de la localidad
+TEUSAQUILLO,20,79809,0.0362,4,Q1,Centroide dentro del poligono de la localidad
+TUNJUELITO,4,44579,0.1052,2,Q4,Centroide dentro del poligono de la localidad
+USAQUEN,42,463822,0.0657,3,Q1,Centroide dentro del poligono de la localidad
+USME,36,387888,0.2174,2,Q5,Centroide dentro del poligono de la localidad
