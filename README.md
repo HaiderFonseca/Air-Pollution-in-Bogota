@@ -4,13 +4,13 @@ A professional, interactive geospatial dashboard for analyzing air pollution con
 
 ## Features
 
-- 🗺️ **Interactive Map**: Explore air pollution data across Bogotá's census sectors
-- 📊 **Multiple Pollutants**: Track PM2.5, PM10, NO2, SO₂, CO, O₃, and Black Carbon
-- 📅 **Temporal Analysis**: Compare data from 2010 to 2018
-- 👥 **Sociodemographic Integration**: View population distribution and socioeconomic indicators
-- 🎨 **Premium UI**: Clean, institutional, iOS-inspired interface
-- ⚡ **Real-time Transitions**: Smooth smoke transitions between pollutant selections
-- 📱 **Responsive Design**: Works seamlessly on different screen sizes
+-  **Interactive Map**: Explore air pollution data across Bogotá's census sectors
+-  **Multiple Pollutants**: Track PM2.5, PM10, NO2, SO₂, CO, O₃, and Black Carbon
+-  **Temporal Analysis**: Compare data from 2010 to 2018
+-  **Sociodemographic Integration**: View population distribution and socioeconomic indicators
+-  **Premium UI**: Clean, institutional, iOS-inspired interface
+-  **Real-time Transitions**: Smooth smoke transitions between pollutant selections
+-  **Responsive Design**: Works seamlessly on different screen sizes
 
 ## Technology Stack
 
@@ -462,4 +462,4 @@ Potential improvements for future versions:
 
 ---
 
-Built with ❤️ for environmental health analysis in Bogotá, Colombia.
+Haider Yesid Fonseca Najar
