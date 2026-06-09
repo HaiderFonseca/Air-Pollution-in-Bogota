@@ -6,6 +6,7 @@ import {
   Year,
   LisaRecord,
   LisaCluster,
+  LisaBivariateRecord,
 } from '../types/dashboard';
 import {
   MOCK_SECTORS,
@@ -19,7 +20,7 @@ export function normalizeSectorId(value: unknown): string {
   return String(value ?? '').trim();
 }
 
-function normalizePollutantName(name: string): Pollutant {
+export function normalizePollutantName(name: string): Pollutant {
   const map: Record<string, Pollutant> = {
     CO: 'CO', co: 'CO',
     eBC: 'eBC', EBC: 'eBC', BC: 'eBC', 'Black Carbon': 'eBC', BlackCarbon: 'eBC', black_carbon: 'eBC',
@@ -34,6 +35,22 @@ function normalizePollutantName(name: string): Pollutant {
     console.warn(`[DEV] Unknown pollutant name: "${name}"`);
   }
   return normalized ?? 'PM2.5';
+}
+
+/** Normalize a LISA cluster string to the canonical union type */
+export function normalizeLisaCluster(value: unknown): LisaCluster {
+  if (value === null || value === undefined) return 'NS';
+  const raw = String(value).trim().toLowerCase();
+  const map: Record<string, LisaCluster> = {
+    hh: 'HH', 'high-high': 'HH', 'alto-alto': 'HH', high_high: 'HH',
+    ll: 'LL', 'low-low': 'LL', 'bajo-bajo': 'LL', low_low: 'LL',
+    hl: 'HL', 'high-low': 'HL', 'alto-bajo': 'HL', high_low: 'HL',
+    lh: 'LH', 'low-high': 'LH', 'bajo-alto': 'LH', low_high: 'LH',
+    // All NS variants — includes actual GPKG value 'No-significativo' (with hyphen)
+    ns: 'NS', 'not significant': 'NS', 'no significativo': 'NS',
+    'no-significativo': 'NS', non_significant: 'NS', not_significant: 'NS', none: 'NS',
+  };
+  return map[raw] ?? 'NS';
 }
 
 function parseCSV(text: string): Record<string, string>[] {
@@ -70,8 +87,6 @@ async function loadSociodemographics(): Promise<Map<string, Record<string, strin
     });
     if (import.meta.env.DEV) {
       console.log(`[DEV] Loaded ${socioMap.size} sociodemographic records`);
-      const sample = rows[0];
-      if (sample) console.log(`[DEV] Socio sample SETU_CCNCT:`, sample['SETU_CCNCT']);
     }
   } catch (e) {
     console.warn('Error loading sociodemographic CSV:', e);
@@ -145,7 +160,6 @@ export async function loadSectors(): Promise<SectorFeature[]> {
 
     if (import.meta.env.DEV) {
       console.log(`[DEV] Loaded ${sectors.length} census sectors`);
-      if (sectors[0]) console.log(`[DEV] Sample sector SETU_CCNCT:`, sectors[0].setuCcnct);
       const withSocio = sectors.filter(s => s.properties.demographics.totalPopulation > 0);
       console.log(`[DEV] Sectors with sociodemographic data: ${withSocio.length}`);
     }
@@ -182,7 +196,6 @@ export async function loadConcentrations(): Promise<PollutantConcentration[]> {
 
     if (import.meta.env.DEV) {
       console.log(`[DEV] Loaded ${converted.length} concentration records`);
-      if (converted[0]) console.log(`[DEV] Sample concentration:`, converted[0]);
       const pollutants = [...new Set(converted.map(c => c.pollutant))].sort();
       console.log(`[DEV] Unique pollutants:`, pollutants.join(', '));
       const years = [...new Set(converted.map(c => c.year))].sort((a, b) => a - b);
@@ -193,6 +206,70 @@ export async function loadConcentrations(): Promise<PollutantConcentration[]> {
   } catch (error) {
     console.warn('Error loading concentrations, using mock data:', error);
     return generateMockConcentrations();
+  }
+}
+
+export async function loadLisaClusters(): Promise<LisaRecord[]> {
+  try {
+    const response = await fetch('/data/lisa/lisa_clusters.json');
+    if (!response.ok) {
+      console.warn('LISA clusters file not found');
+      return [];
+    }
+    const records = await response.json();
+    if (!Array.isArray(records)) return [];
+
+    const converted: LisaRecord[] = records.map((r: Record<string, unknown>) => ({
+      setuCcnct: normalizeSectorId(r['SETU_CCNCT']),
+      pollutant: normalizePollutantName(String(r['pollutant'] ?? '')),
+      year: Number(r['year']) as Year,
+      cluster: normalizeLisaCluster(r['cluster']),
+    }));
+
+    if (import.meta.env.DEV) {
+      console.log(`[DEV] Loaded ${converted.length} LISA cluster records`);
+    }
+    return converted;
+  } catch (e) {
+    console.warn('Error loading LISA clusters:', e);
+    return [];
+  }
+}
+
+/**
+ * Load LISA bivariado data from the pre-generated JSON.
+ * File is produced by: python scripts/convert_lisa_bivariado.py
+ * Returns empty array if file does not exist yet.
+ */
+export async function loadLisaBivariado(): Promise<LisaBivariateRecord[]> {
+  try {
+    const response = await fetch('/data/lisa_bivariado/lisa_bivariado.json');
+    if (!response.ok) {
+      if (import.meta.env.DEV) {
+        console.info('[DEV] LISA bivariado file not found. Run scripts/convert_lisa_bivariado.py to generate it.');
+      }
+      return [];
+    }
+    const records = await response.json();
+    if (!Array.isArray(records)) return [];
+
+    const converted: LisaBivariateRecord[] = records.map((r: Record<string, unknown>) => ({
+      setuCcnct: normalizeSectorId(r['SETU_CCNCT']),
+      pollutant: normalizePollutantName(String(r['pollutant'] ?? '')),
+      year: Number(r['year']),
+      LISA_bi_clase: normalizeLisaCluster(r['LISA_bi_clase']),
+    }));
+
+    if (import.meta.env.DEV) {
+      console.log(`[DEV] Loaded ${converted.length} LISA bivariado records`);
+      const pollutants = [...new Set(converted.map(c => c.pollutant))].sort();
+      console.log(`[DEV] Bivariate pollutants:`, pollutants.join(', '));
+    }
+
+    return converted;
+  } catch (e) {
+    console.warn('Error loading LISA bivariado:', e);
+    return [];
   }
 }
 
@@ -222,12 +299,6 @@ export function getSectorData(
     });
   });
 
-  if (import.meta.env.DEV) {
-    console.log(`[DEV] Clicked sector: ${normalizedId}`);
-    const pm25_2018 = sectorConcentrations['PM2.5']?.[2018];
-    console.log(`[DEV] PM2.5 year=2018 for this sector:`, pm25_2018 ?? 'not found');
-  }
-
   return {
     setuCcnct: sector.setuCcnct,
     name: sector.name,
@@ -243,17 +314,7 @@ export function getConcentration(
   year: Year,
   concentrations: PollutantConcentration[],
 ): number | null {
-  const normalizedId = normalizeSectorId(setuCcnct);
-
-  if (import.meta.env.DEV) {
-    const result = getConcentrationValue(normalizedId, pollutant, year, concentrations);
-    if (result === null) {
-      // Only log misses occasionally to avoid flooding
-    }
-    return result;
-  }
-
-  return getConcentrationValue(normalizedId, pollutant, year, concentrations);
+  return getConcentrationValue(normalizeSectorId(setuCcnct), pollutant, year, concentrations);
 }
 
 export function getConcentrationRange(
@@ -271,33 +332,6 @@ export function getConcentrationRange(
 
 export function isMissingData(value: number | null): boolean {
   return value === null || value === undefined;
-}
-
-export async function loadLisaClusters(): Promise<LisaRecord[]> {
-  try {
-    const response = await fetch('/data/lisa/lisa_clusters.json');
-    if (!response.ok) {
-      console.warn('LISA clusters file not found');
-      return [];
-    }
-    const records = await response.json();
-    if (!Array.isArray(records)) return [];
-
-    const converted: LisaRecord[] = records.map((r: Record<string, unknown>) => ({
-      setuCcnct: normalizeSectorId(r['SETU_CCNCT']),
-      pollutant: r['pollutant'] as Pollutant,
-      year: Number(r['year']) as Year,
-      cluster: r['cluster'] as LisaCluster,
-    }));
-
-    if (import.meta.env.DEV) {
-      console.log(`[DEV] Loaded ${converted.length} LISA cluster records`);
-    }
-    return converted;
-  } catch (e) {
-    console.warn('Error loading LISA clusters:', e);
-    return [];
-  }
 }
 
 export function convertConcentrationRecord(record: Record<string, any>): PollutantConcentration {

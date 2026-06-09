@@ -12,6 +12,8 @@ import {
   PollutantConcentration,
   SelectedSector,
   LisaCluster,
+  PersistenceData,
+  LayerMode,
 } from '../types/dashboard';
 
 interface AppLayoutProps {
@@ -27,14 +29,27 @@ interface AppLayoutProps {
   onCenterBogota: () => void;
   isTransitioning: boolean;
   centerTrigger: number;
-  showLisa: boolean;
-  onToggleLisa: () => void;
+  layerMode: LayerMode;
+  onLayerModeChange: (mode: LayerMode) => void;
   lisaIndex: Map<string, LisaCluster>;
+  lisaBivIndex: Map<string, LisaCluster>;
+  persistenceData: Map<string, PersistenceData>;
   lisaAvailable: boolean;
+  lisaBivAvailable: boolean;
   currentLisaCluster: LisaCluster | null;
+  currentBivariateCluster: LisaCluster | null;
+  currentPersistenceInfo: PersistenceData | null;
+  maxHHYearsCount: number;
+  bivariateYear: 2023 | 2024;
   concP5: number;
   concP95: number;
 }
+
+const LAYER_OPTIONS: { value: LayerMode; label: string }[] = [
+  { value: 'concentracion',    label: 'Concentración' },
+  { value: 'lisa_univariado',  label: 'LISA univariado' },
+  { value: 'lisa_bivariado',   label: 'LISA bivariado' },
+];
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
   sectors,
@@ -49,11 +64,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onCenterBogota,
   isTransitioning,
   centerTrigger,
-  showLisa,
-  onToggleLisa,
+  layerMode,
+  onLayerModeChange,
   lisaIndex,
+  lisaBivIndex,
+  persistenceData,
   lisaAvailable,
+  lisaBivAvailable,
   currentLisaCluster,
+  currentBivariateCluster,
+  currentPersistenceInfo,
+  maxHHYearsCount,
+  bivariateYear,
   concP5,
   concP95,
 }) => {
@@ -62,6 +84,24 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   useEffect(() => {
     if (selectedSector) setShowDetailPanel(true);
   }, [selectedSector?.setuCcnct]);
+
+  // Unavailability notice text
+  const unavailableNotice = (() => {
+    if (layerMode === 'lisa_univariado' && !lisaAvailable) {
+      return 'Sin capa LISA univariado para esta combinación.';
+    }
+    if (layerMode === 'lisa_bivariado' && !lisaBivAvailable) {
+      return `LISA bivariado no disponible (ejecute scripts/convert_lisa_bivariado.py).`;
+    }
+    return null;
+  })();
+
+  // Bivariate year info text
+  const bivariateInfo = layerMode === 'lisa_bivariado'
+    ? (selectedPollutant === 'eBC'
+        ? 'Mostrando LISA bivariado 2023 para eBC'
+        : `Mostrando LISA bivariado ${bivariateYear}`)
+    : null;
 
   return (
     <motion.div
@@ -91,29 +131,45 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           selectedSectorId={selectedSector?.setuCcnct || null}
           onSectorSelect={onSectorSelect}
           centerTrigger={centerTrigger}
-          showLisa={showLisa}
+          layerMode={layerMode}
           lisaIndex={lisaIndex}
+          lisaBivIndex={lisaBivIndex}
+          persistenceData={persistenceData}
+          bivariateYear={bivariateYear}
           concP5={concP5}
           concP95={concP95}
         />
 
-        {/* LISA toggle — top-left pill */}
-        <div className="absolute top-4 left-4" style={{ zIndex: 1000 }}>
-          <button
-            onClick={onToggleLisa}
-            className={`
-              px-4 py-1.5 rounded-full text-sm font-semibold shadow-md
-              border transition-all duration-200
-              ${showLisa
-                ? 'bg-stone-800 text-white border-stone-900'
-                : 'bg-white/90 text-stone-700 border-stone-300 hover:bg-stone-100'}
-            `}
-          >
-            Clusters LISA
-          </button>
-          {showLisa && !lisaAvailable && (
-            <div className="mt-2 bg-white/95 rounded-lg px-3 py-2 shadow text-xs text-stone-500 max-w-[200px]">
-              No hay capa LISA disponible para esta combinación
+        {/* Layer selector — top-left segmented control */}
+        <div className="absolute top-4 left-4 flex flex-col gap-1.5" style={{ zIndex: 1000 }}>
+          <div className="flex bg-white/95 backdrop-blur-sm rounded-full shadow border border-stone-200 p-0.5 gap-0.5">
+            {LAYER_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => onLayerModeChange(opt.value)}
+                className={`
+                  px-3 py-1 rounded-full text-xs font-medium transition-all duration-150
+                  ${layerMode === opt.value
+                    ? 'bg-stone-800 text-white shadow-sm'
+                    : 'text-stone-600 hover:bg-stone-100'}
+                `}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Bivariate year notice */}
+          {bivariateInfo && (
+            <div className="bg-white/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow border border-stone-200 text-xs text-stone-500">
+              {bivariateInfo}
+            </div>
+          )}
+
+          {/* Unavailability warning */}
+          {unavailableNotice && (
+            <div className="bg-white/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow border border-amber-200 text-xs text-amber-700 max-w-[240px]">
+              {unavailableNotice}
             </div>
           )}
         </div>
@@ -130,9 +186,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             <div className="p-3">
               <Legend
                 pollutant={selectedPollutant}
-                showLisa={showLisa}
+                layerMode={layerMode}
                 concP5={concP5}
                 concP95={concP95}
+                maxHHYearsCount={maxHHYearsCount}
+                bivariateYear={bivariateYear}
               />
             </div>
           </div>
@@ -153,7 +211,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   sector={selectedSector}
                   selectedPollutant={selectedPollutant}
                   selectedYear={selectedYear}
+                  layerMode={layerMode}
                   lisaCluster={currentLisaCluster}
+                  bivariateCluster={currentBivariateCluster}
+                  persistenceInfo={currentPersistenceInfo}
+                  bivariateYear={bivariateYear}
                   onClose={() => {
                     setShowDetailPanel(false);
                     onSectorDeselect();

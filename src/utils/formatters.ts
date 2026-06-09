@@ -69,6 +69,33 @@ export function formatIPM(value: number | null): string {
   return value.toFixed(3);
 }
 
+interface IPMQuintileResult {
+  quintile: string;   // 'Q1' … 'Q5'
+  label: string;      // human-readable description
+}
+
+/**
+ * Classify an IPM value into the quintile brackets defined in the thesis
+ * sociodemographic analysis for Bogotá census sectors.
+ *
+ * Q1: 0.000 – 0.042  (menor pobreza multidimensional)
+ * Q2: 0.043 – 0.067  (baja pobreza multidimensional)
+ * Q3: 0.068 – 0.099  (pobreza intermedia)
+ * Q4: 0.100 – 0.152  (pobreza media-alta)
+ * Q5: 0.153 – 0.860  (mayor pobreza multidimensional)
+ */
+export function getIPMQuintile(value: number | null): IPMQuintileResult | null {
+  if (value === null || value === undefined || isNaN(value)) return null;
+
+  if (value <= 0.042) return { quintile: 'Q1', label: 'menor pobreza multidimensional' };
+  if (value <= 0.067) return { quintile: 'Q2', label: 'baja pobreza multidimensional' };
+  if (value <= 0.099) return { quintile: 'Q3', label: 'pobreza intermedia' };
+  if (value <= 0.152) return { quintile: 'Q4', label: 'pobreza media-alta' };
+  if (value <= 0.860) return { quintile: 'Q5', label: 'mayor pobreza multidimensional' };
+
+  return null; // fuera del rango esperado
+}
+
 /**
  * Format sector identification
  */
