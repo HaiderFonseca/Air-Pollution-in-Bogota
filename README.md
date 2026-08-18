@@ -2,6 +2,14 @@
 
 A professional, interactive geospatial dashboard for analyzing air pollution concentrations across Bogotá's census sectors, integrated with sociodemographic data.
 
+## Visualisation 
+    https://air-pollution-in-bogota.vercel.app/
+    
+
+https://github.com/user-attachments/assets/82f1f6f4-0996-4d59-aec8-d85d60342c24
+
+
+
 ## Features
 
 -  **Interactive Map**: Explore air pollution data across Bogotá's census sectors
